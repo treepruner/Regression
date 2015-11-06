@@ -1,0 +1,241 @@
+---
+title: "Regression_Assignment"
+author: "treepruner"
+date: "September 22, 2015"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+### Executive Summary
+The mtcars dataset was used determine a parsimonious model between the outcome variable, miles per gallon (MPG), and the other variables in the data set. Once a model was identified with an r squared above 80% and both regressors with p values less than 5%, the transmission variable was added in. The final model determined that a manual transmission is better for MPG holding weight and quarter second time constant. The model estimates a 2.935837 miles per gallon increase in manual transmissions.
+
+### Exploratory Data Analyses
+My strategy for model selection was to first identify linear relationships between mpg and the other variables by running cor(mtcars), then plot the variables with a correlation  > .75 using ggpairs. 
+```{r echo = FALSE}
+data(mtcars)
+library(ggplot2)
+library(GGally)
+library(car)
+# 0 = automatic, 1 = manual
+```
+```{r include = FALSE}
+cor(mtcars)
+```
+Some of the variables are correlated to each other.  Disp is higly correlated to cyl. Wt is correlated to disp and cyl. Hp is highly correlated to cyl and disp.  See ggpairs output in appendix.
+
+### Fit Models
+I ran a series of simple linear regression with each variable identified above. 
+```{r eval = FALSE}
+wt <- lm(mpg ~ wt, data = mtcars)
+cyl <- lm(mpg ~ cyl, data = mtcars)
+disp <- lm(mpg ~ disp, data = mtcars)
+hp <- lm(mpg ~ hp, data = mtcars)
+drat <- lm(mpg ~ drat, data = mtcars)
+qsec <- lm(mpg ~ qsec, data = mtcars)
+vs <- lm(mpg ~ vs, data = mtcars)
+am <- lm(mpg ~ am, data = mtcars)
+gear <- lm(mpg ~ gear, data = mtcars)
+carb <- lm(mpg ~ carb, data = mtcars)
+```
+```{r echo = FALSE}
+wt <- lm(mpg ~ wt, data = mtcars)
+cyl <- lm(mpg ~ cyl, data = mtcars)
+disp <- lm(mpg ~ disp, data = mtcars)
+hp <- lm(mpg ~ hp, data = mtcars)
+
+# put results together
+options(scipen=999)
+simple <-   cbind("wt"  , round(summary(wt)$r.squared,4),   round(summary(wt)$adj.r.squared,4),   round(summary(wt)$fstatistic[1],2),   summary(wt)$coef[2,4])
+colnames(simple) <- c("model", "r.squared", "adj.r.squared", "fstatistic", "p value")
+rownames(simple) <- NULL
+```
+The model with lowest p value was wt <- lm(mpg ~ wt, data = mtcars).
+```{r echo = FALSE}
+simple
+```
+Next, new models were created with wt as the 1st regressor and each of the remaining variables was tested as the second regressor.  
+```{r eval = FALSE}
+## Add regressors to wt
+wt_drat <- lm(mpg ~ wt + drat, data = mtcars)
+wt_qsec <- lm(mpg ~ wt + qsec, data = mtcars)
+wt_vs <- lm(mpg ~ wt + vs, data = mtcars)
+wt_am <- lm(mpg ~ wt + am, data = mtcars)
+wt_gear <- lm(mpg ~ wt + gear, data = mtcars)
+wt_carb <- lm(mpg ~ wt + carb, data = mtcars)
+```
+The model wt_qsec <- lm(mpg ~ wt + qsec, data = mtcars) had the lowest p value for the 2nd regressor.
+```{r echo = FALSE}
+wt_drat <- lm(mpg ~ wt + drat, data = mtcars)
+wt_qsec <- lm(mpg ~ wt + qsec, data = mtcars)
+wt_vs <- lm(mpg ~ wt + vs, data = mtcars)
+wt_am <- lm(mpg ~ wt + am, data = mtcars)
+wt_gear <- lm(mpg ~ wt + gear, data = mtcars)
+wt_carb <- lm(mpg ~ wt + carb, data = mtcars)
+
+options(scipen=999)
+multi1 <- NULL
+multi1 <-cbind("wt_qsec", round(summary(wt_qsec)$r.squared,4), round(summary(wt_qsec)$adj.r.squared,4), round(summary(wt_qsec)$fstatistic[1],2), round(summary(wt_qsec)$coef[2,4],11))
+colnames(multi1) <- c("model", "r.squared", "adj.r.squared", "fstatistic", "p value")
+rownames(multi1) <- NULL
+```
+```{r echo = FALSE}
+multi1
+```
+I ran an anova to compare the 2 models. The model with wt and qsec was a real improvement. Now that I had a model to predict mpg, I added in the transmission variable to differentiate the effect of transmission type. 
+
+### Interpreting the Coefficients of the Final Model
+```{r echo = FALSE}
+fit <- lm(mpg ~ wt + qsec + factor(am),  data = mtcars)
+summary(fit)$coef
+```
+As the weight goes up by a unit of 1 (which is lbs/1000), the mpg will decrease by 3.916504 miles per gallon. As the quarter mile time goes up by a quarter second, the mpg will increase by 1.225886 miles per gallon. All things being held equal, lighter weight, slower cars in the 1/4 mile, will have better MPG.
+
+The intercept is what changes between the transmission types. The automatic transmission, am = 0, has an Intercept of 9.617781. The Intercept for a manual transmission is 9.617781 + 2.935837. The final models are:
+```{r}
+# manual mpg = 9.617781 -3.916504 * wt + 1.225886 * qsec 
+# automatic mpg = (9.617781 + 2.935837) -3.916504 * wt + 1.225886 * qsec
+```
+### Evaluating the Model
+The final model was NOT significantly better than the wt + qsec model, but the am variable is significant and does identify the effect of transmission type, the purpose of our analysis.
+```{r echo =FALSE}
+anova(wt, wt_qsec, fit) 
+```
+The  sqrt(vif(fit))  is below 2, so the Variance Inflation Factor (VIF) VIF is ok and there doesn't appear to be an issue with multi-collinearity.
+```{r echo =FALSE}
+sqrt(vif(fit)) 
+```
+The largest dfbetas value, 1.093842173234, is for Chrysler Imperial.
+The hatvalues went from Merc 450SLC at 0.05303857 to Merc 230 at 0.29704218. 
+
+The Residuals vs Fitted Values plot didn't reveal a systematic pattern, which is good. The Normal Q-Q plot evaluates normality in the error terms and it looked ok. 
+
+
+## Appendix Area
+
+## Exploratory Figures
+```{r echo = FALSE, message=FALSE, warning=FALSE,  fig.height=8, fig.width=8, }
+c <- c(1,2,3,4,6)
+mtcars$am <- as.factor(mtcars$am)
+g <- ggpairs(mtcars,
+             columns = c,
+             upper = list(continuous = "cor"),
+             lower = list(continuous = "points"),
+             diag = "blank",
+             axisLabels = "show",
+             color = "am",
+             title = "Variables with > .75 Correlation to MPG"
+)
+g
+```
+
+
+## Key Variables vs MPG
+```{r, fig.height=3.5, fig.width=3.5, echo = FALSE}
+g1 <- ggplot(mtcars, aes(x = wt, y = mpg, color = am))
+g1 <- g1 + geom_point(size = 6, colour = "black") + geom_point()
+g1 <- g1 + xlab ("Weight") + ylab("MPG")
+g1
+
+g2 <- ggplot(mtcars, aes(x = qsec, y = mpg, colour = am))
+g2 <- g2 + geom_point(size = 6, colour = "black") + geom_point()
+g2 <- g2 + xlab ("QSEC") + ylab("MPG")
+g2
+```
+
+```{r, fig.height=3.5, fig.width=3.5, echo = FALSE, warning = FALSE, message = FALSE}
+library(Hmisc)
+# bin the weights
+mtcars$wt_bin <- cut2(mtcars$wt, g = 5)
+mtcars$qsec_bin <- cut2(mtcars$qsec, g = 2)
+```
+
+```{r, fig.height=5, fig.width=8, echo = FALSE}
+g3 <- ggplot(mtcars, aes(x = wt_bin, y = mpg )) 
+g3 <- g3 + geom_boxplot(aes(fill = factor(am)))
+g3 <- g3 + facet_grid(.~am)
+g3 <- g3 + xlab ("Binned Weights") + ylab("MPG")
+g3 <- g3 + theme(legend.position="bottom")
+g3 
+
+
+
+```
+
+### Plot the Model
+```{r, fig.height=3.5, fig.width=3.5, echo = FALSE}
+plot(fit)
+```
+
+#### This PDF was created in Knitr
+
+
+```{r, echo = FALSE, include = FALSE}
+## Residual Plot and Some Diagnostics
+# Thanks to this site: http://www.statmethods.net/stats/rdiagnostics.html
+#### Assessing Outliers
+#### this is something on the web page, but not in Coursera course
+outlierTest(fit) # Bonferonni p-value for most extreme obs
+```
+
+
+```{r, fig.height=4, fig.width=4, echo = FALSE, include = FALSE}
+#### Influential Observations
+#### this is something on the web page, but not in Coursera course
+# added variable plots 
+avPlots(fit)
+# Cook's D plot
+# identify D values > 4/(n-k-1) 
+cutoff <- 4/((nrow(mtcars)-length(fit$coefficients)-2)) 
+plot(fit, which=4, cook.levels=cutoff)
+# Influence Plot 
+influencePlot(fit, id.method="identify", main="Influence Plot", sub="Circle size is proportial to Cook's Distance" )
+```
+
+
+
+```{r, fig.height=4, fig.width=4, echo=FALSE, include = FALSE}
+#### distribution of studentized residuals
+#### this is something on the web page, but not in Coursera course
+library(MASS)
+sresid <- studres(fit) 
+hist(sresid, freq=FALSE, 
+   main="Distribution of Studentized Residuals")
+xfit<-seq(min(sresid),max(sresid),length=40) 
+yfit<-dnorm(xfit) 
+lines(xfit, yfit)
+```
+
+
+```{r, echo=FALSE, include = FALSE}
+#### Evaluate homoscedasticity
+#### this is something on the web page, but not in Coursera course
+#non-constant error variance test
+ncvTest(fit)
+```
+
+
+````{r, fig.height=4, fig.width=4, echo=FALSE, include = FALSE}
+#### this is something on the web page, but not in Coursera course
+# plot studentized residuals vs. fitted values 
+spreadLevelPlot(fit)
+```
+
+
+```{r, fig.height=4, fig.width=4, include=FALSE}
+#### Evaluate Nonlinearity
+#### this is something on the web page, but not in Coursera course
+# component + residual plot 
+crPlots(fit) 
+
+
+# Ceres plots 
+#ceresPlots(fit) # no covariates
+```
+
+
+```{r, include=FALSE}
+#### Test for Autocorrelated Errors
+# this is something on the web page, but not in Coursera course
+durbinWatsonTest(fit)
+```
